@@ -5,6 +5,9 @@ from sqlite3 import Error
 import logging
 import os
 
+# import tracemalloc
+# tracemalloc.start()
+
 
 def db_path():
     data_base_name = "db.sqlite"
@@ -22,7 +25,6 @@ class Date_Manipulete:
 
     def recognition_birthday_date(self) -> [datetime, None]:
         regex1 = re.compile(r"(\d\d?).(\d\d?).(\d\d\d\d)")
-        regex2 = re.compile(r"(\d\d\d\d).(\d\d?).(\d\d?)")
         if re.findall(regex1, self.date):
             try:
                 cal = re.findall(regex1, self.date)
@@ -31,22 +33,14 @@ class Date_Manipulete:
                 logging.debug(f"Встановлена дата народження {datetime}")
             except ValueError:
                 logging.error("Такої дати не існує")
+                return False
             except:
                 logging.error(
                     'Сталася помилка у функціЇ recognition_birthday_date')
-        elif re.findall(regex2, self.date):
-            try:
-                cal = re.findall(regex2, self.date)
-                cal = [int(_) for _ in cal[0]]
-                calendar_date = datetime(*cal)
-                logging.debug(f" дата народження {datetime}")
-            except ValueError:
-                logging.error("Такої дати не існує")
-            except:
-                logging.error(
-                    'Сталася помилка у функціЇ recognition_birthday_date')
+                return False
         else:
             logging.error("Користувач ввів дату не за шаблоном")
+            return False
         return calendar_date
 
     def datetime_in_str(self) -> [str, None]:
@@ -86,6 +80,10 @@ class DataBaseCommand:
                 )'
             )
             await db.commit()
+            await cursor.execute(
+                'CREATE TABLE IF NOT EXISTS chats (chat_id INTEGER PRIMARY KEY)'
+                )
+            await db.commit()
             logging.debug("Встановлено з'єднання до БД")
 
     async def reg_new_user(
@@ -98,7 +96,7 @@ class DataBaseCommand:
             cursor = await db.cursor()
             try:
                 await cursor.execute(
-                    'INSERT OR IGNORE INTO users (first_name, last_name, user_id, user_nickname) VALUES ("%s", "%s"," %d","@%d")'
+                    'INSERT OR IGNORE INTO users (first_name, last_name, user_id, user_nickname) VALUES ("%s", "%s"," %d","@%s")'
                     % (first_name, last_name, user_id, user_nickname))
                 await db.commit()
                 logging.debug('Запис у БД даних кристувача')
@@ -113,8 +111,8 @@ class DataBaseCommand:
             cursor = await db.cursor()
             try:
                 await cursor.execute(
-                    'INSERT INTO users (birthday_date) VALUES ("%s") WHERE user_id = "%d"'
-                    % (birthday_date, user_id))
+                    'UPDATE users SET birthday_date = "%s" WHERE user_id = "%d"'% (birthday_date, user_id)
+                    )
                 await db.commit()
                 logging.debug(
                     f'Запис у БД день народження кристувача {user_id}')
@@ -129,7 +127,8 @@ class DataBaseCommand:
             cursor = await db.cursor()
             try:
                 await cursor.execute(
-                    'UPDATE users SET birthday_date=("%s") WHERE user_id = "%d"' % (birthday_date, user_id))
+                    'UPDATE users SET birthday_date=("%s") WHERE user_id = "%d"' % (birthday_date, user_id)
+                    )
                 await db.commit()
                 logging.debug(
                     f'Оновлення даних о дні народження кристувача {user_id}')
@@ -139,30 +138,90 @@ class DataBaseCommand:
     async def check_birthday_date() -> list:
         async with aiosqlite.connect(db_path()) as db:
             cursor = await db.cursor()
-            await cursor.execute('SELECT birthday_date, user_id, first_name, user_nickname FROM users')
+            await cursor.execute(
+                'SELECT birthday_date, user_id, first_name, user_nickname FROM users'
+                )
             return await cursor.fetchall()
-
-    async def select_non_birthday_persons(user_id: int) -> list:
-        async with aiosqlite.connect(db_path()) as db:
-            cursor = await db.cursor()
-            await cursor.execute('SELECT user_id FROM users WHERE NOT user_id = "%d"' % (user_id))
-            return await cursor.fetchall()
-
+        
     async def select_all() -> list:
         async with aiosqlite.connect(db_path()) as db:
             cursor = await db.cursor()
-            await cursor.execute('SELECT * FROM users')
+            await cursor.execute(
+                'SELECT * FROM users'
+                )
             return await cursor.fetchall()
 
     async def check_my_data(user_id: int) -> tuple:
         async with aiosqlite.connect(db_path()) as db:
             cursor = await db.cursor()
-            await cursor.execute('SELECT birthday_date FROM users WHERE user_id = "%d"' % (user_id))
+            await cursor.execute(
+                'SELECT birthday_date FROM users WHERE user_id = "%d"' % (user_id)
+                )
             return await cursor.fetchone()
 
     async def admin_delete_User_from_db(user_id) -> None:
         async with aiosqlite.connect(db_path()) as db:
             cursor = await db.cursor()
-            await cursor.execute('DELETE FROM users WHERE user_id = "%d"' % (user_id))
+            await cursor.execute(
+                'DELETE FROM users WHERE user_id = "%d"' % (user_id)
+                )
             await db.commit()
             await cursor.close()
+    
+    async def sql_commads_admin(command:str)-> None:
+        async with aiosqlite.connect(db_path()) as db:
+            cursor = await db.cursor()
+            await cursor.execute(command)
+            await db.commit()
+
+    async def add_new_chats_in_db(chats_id : int) -> None:
+        async with aiosqlite.connect(db_path()) as db:
+            cursor = await db.cursor()
+            await cursor.execute(
+                'INSERT OR IGNORE INTO chats (chat_id) VALUES ("%d")'%chats_id
+                )
+            await db.commit()
+
+    async def select_non_birthday_persons(birshday_user_id: int) -> list:
+        async with aiosqlite.connect(db_path()) as db:
+            cursor = await db.cursor()
+            await cursor.execute(
+                'SELECT EXISTS(SELECT user_id FROM users WHERE NOT user_id = %d)' %(birshday_user_id)
+                )
+            exist_user = await cursor.fetchone()
+            
+            if exist_user[0] == 1:
+                correct_list_of_users = []
+                await cursor.execute(
+                    'SELECT user_id FROM users WHERE NOT user_id = %d' % (birshday_user_id)
+                    )
+                list_user = []
+                async for row in cursor:
+                    list_user.append(row[0])
+                return set(list_user)
+        
+    async def select_all_chats_id() -> list:
+        async with aiosqlite.connect(db_path()) as db:
+            cursor = await db.cursor()
+            await cursor.execute(
+                'SELECT chat_id FROM chats'
+                )            # chat_ids = await cursor.fetchone()
+            chat_ids = []
+            async for row in cursor:
+                chat_ids.append(row[0])
+            return set(chat_ids)
+        
+    async def delete_old_chat(chat_id: int) -> None:
+        async with aiosqlite.connect(db_path()) as db:
+            cursor = await db.cursor()
+            await cursor.execute(
+                'DELETE FROM chats WHERE chat_id = "%d"' % (chat_id)
+                )
+            await db.commit()
+            await cursor.close()
+        
+
+    
+ 
+            
+                

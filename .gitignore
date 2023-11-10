@@ -3,3 +3,6 @@ venv/
 config.py
 log.txt
 data/
+.idea
+.vscode
+*.py

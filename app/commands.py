@@ -6,7 +6,7 @@ async def set_commands(bot: Bot):
     commands = [
         BotCommand(
             command='update',
-            description='Оновити Вашу дату народження'
+            description='Оновити вашу дату народження'
         ),
         BotCommand(
             command='help',
@@ -15,7 +15,10 @@ async def set_commands(bot: Bot):
         BotCommand(
             command='view',
             description='Переглянути дату свого ДР'
+        ),
+        BotCommand(
+            command='donate',
+            description='Допомогти розробнику копіїчкою'
         )
     ]
-
     await bot.set_my_commands(commands, BotCommandScopeDefault())
